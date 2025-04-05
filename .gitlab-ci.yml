@@ -1,0 +1,38 @@
+
+stages:
+  - validate
+  - plan
+  - apply
+
+variables:
+  TF_VERSION: "1.6.0"
+  AWS_DEFAULT_REGION: "us-east-1"
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+default:
+  image: hashicorp/terraform:$TF_VERSION
+  before_script:
+    - terraform --version
+    - terraform workspace select $CI_ENVIRONMENT_NAME || terraform workspace new $CI_ENVIRONMENT_NAME
+    - terraform init -input=false -backend-config="bucket=$TF_BACKEND_BUCKET" -backend-config="key=$CI_ENVIRONMENT_NAME/terraform.tfstate" -backend-config="region=$AWS_DEFAULT_REGION"
+
+validate:
+  stage: validate
+  script:
+    - terraform validate
+    - terraform fmt -check
+
+plan:
+  stage: plan
+  script:
+    - terraform plan -var="environment=$CI_ENVIRONMENT_NAME" -out=tfplan
+  artifacts:
+    paths:
+      - tfplan
+
+apply:
+  stage: apply
+  when: manual
+  script:
+    - terraform apply -auto-approve tfplan
